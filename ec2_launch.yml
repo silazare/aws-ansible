@@ -1,0 +1,274 @@
+---
+# ansible-playbook ec2_launch.yml --vault-password-file vault_pass
+#
+# AWS tasks for infra deploy which are run 'locally'
+# AWS Keys should be provided in vault - secret.yml
+  - name: Provision AWS infra
+    hosts: localhost
+    connection: local
+    gather_facts: no
+    tags: provisioning
+    vars_files:
+      - secret.yml
+
+# Task that will be used to Launch/Create an EC2 Instance
+    tasks:
+      - name: Get my current IP address
+        uri:
+          url: http://checkip.amazonaws.com/
+          return_content: yes
+        register: my_ip
+
+      - name: Deploy ELB security group
+        local_action:
+          module: ec2_group
+          name: "{{ elb_security_group }}"
+          description: Security Group for Webserver
+          region: "{{ aws_region }}"
+          aws_secret_key: "{{ secret_key }}"
+          aws_access_key: "{{ access_key }}"
+          rules:
+            - proto: tcp
+              from_port: 80
+              to_port: 80
+              cidr_ip: "{{ my_ip.content | replace('\n', '') }}/32"
+              rule_desc: allow all on port 80
+          rules_egress:
+            - proto: all
+              cidr_ip: 0.0.0.0/0
+              rule_desc: allow all
+          tags:
+            Name: "{{ elb_security_group }}"
+        register: ec2_elbsecgroup
+
+      - name: Deploy WEB security group
+        local_action:
+          module: ec2_group
+          name: "{{ web_security_group }}"
+          description: Security Group for Webserver
+          region: "{{ aws_region }}"
+          aws_secret_key: "{{ secret_key }}"
+          aws_access_key: "{{ access_key }}"
+          rules:
+            - proto: tcp
+              from_port: 22
+              to_port: 22
+              cidr_ip: "{{ my_ip.content | replace('\n', '') }}/32"
+              rule_desc: allow all on port 22
+            - proto: tcp
+              from_port: 80
+              to_port: 80
+              group_id: "{{ ec2_elbsecgroup.group_id }}"
+              rule_desc: allow port 80 to elb-sg only
+          rules_egress:
+            - proto: all
+              cidr_ip: 0.0.0.0/0
+              rule_desc: allow all
+          tags:
+            Name: "{{ web_security_group }}"
+        register: ec2_websecgroup
+
+      - name: Deploy WEB load balancer
+        ec2_elb_lb:
+          name: "{{ elb_name }}"
+          state: present
+          idle_timeout: 300
+          cross_az_load_balancing: "yes"
+          region: "{{ aws_region }}"
+          aws_secret_key: "{{ secret_key }}"
+          aws_access_key: "{{ access_key }}"
+          zones:
+            - us-east-1a
+            - us-east-1d
+          listeners:
+            - protocol: http
+              load_balancer_port: 80
+              instance_port: 80
+          health_check:
+            ping_protocol: http # options are http, https, ssl, tcp
+            ping_port: 80
+            ping_path: "/index.html" # not required for tcp or ssl
+            response_timeout: 2 # seconds
+            interval: 5 # seconds
+            unhealthy_threshold: 2
+            healthy_threshold: 3
+          security_group_names:
+            - "{{ elb_security_group }}"
+          tags:
+            Name: "{{ elb_name }}"
+            Environment: "{{ env }}"
+        register: ec2_load_balancer
+
+      - name: Launch EC2 Instances
+        local_action:
+          module: ec2
+          region: "{{ aws_region }}"
+          group: "{{ web_security_group }}"
+          instance_type: "{{ instance_type }}"
+          image: "{{ ami_id }}"
+          wait: true
+          keypair: "{{ aws_keypair }}"
+          exact_count: "{{ count }}"
+          count_tag:
+            Environment: "{{ env }}"
+          aws_secret_key: "{{ secret_key }}"
+          aws_access_key: "{{ access_key }}"
+          instance_tags:
+            Environment: "{{ env }}"
+        register: ec2
+
+      - name: Generate sequence id for tagging
+        debug: msg="{{ item }}"
+        with_sequence: start=1 end="{{ count }}"
+        register: sequence
+
+      - name: Tag Name for instances
+        ec2_tag:
+          aws_secret_key: "{{ secret_key }}"
+          aws_access_key: "{{ access_key }}"
+          region: "{{ aws_region }}"
+          resource: "{{ item.0.id }}"
+          tags:
+            Name: "{{ env }}-web-0{{ item.1.msg }}"
+        with_together:
+          - "{{ ec2.tagged_instances }}"
+          - "{{ sequence.results }}"
+
+      - name: Add all web instance IPs to host group
+        add_host:
+          hostname: "{{ item.public_ip }}"
+          groupname: webservers
+        with_items: "{{ ec2.tagged_instances }}"
+
+      - name: Wait for SSH to come up
+        wait_for:
+          host: "{{ item.public_ip }}"
+          port: 22
+          delay: 60
+          timeout: 320
+          state: started
+        with_items: "{{ ec2.tagged_instances }}"
+
+      - name: Download static site html
+        local_action: shell curl {{ docs_direct_url }}/export?format=tsv -o {{ playbook_dir }}/roles/nginx/templates/index.html
+
+      - name: Touch host ssh fingerprints
+        shell: ssh-keyscan -t ecdsa {{ item.public_ip }}
+        with_items: "{{ ec2.tagged_instances }}"
+        register: host_key
+
+      - name: Add Host Key
+        local_action:
+          module: known_hosts
+          key: "{{ item.0.public_ip }} ecdsa-sha2-nistp256 {{ host_key.results[ item.1.msg|int - 1 ].stdout.split(' ')[2] }}"
+          name: "{{ item.0.public_ip }}"
+          state: present
+        with_together:
+          - "{{ ec2.tagged_instances }}"
+          - "{{ sequence.results }}"
+
+# Run the original playbook for the single-host version.
+  - name: Webserver Setup
+    hosts: webservers
+    remote_user: ubuntu
+    become: yes
+    become_method: sudo
+    become_user: root
+    gather_facts: false
+    roles:
+      - bootstrap
+      - common
+      - nginx
+
+# AWS tasks for check and destroy deployed infra in some time
+  - name: Additional AWS infra tasks
+    hosts: localhost
+    connection: local
+    gather_facts: no
+    tags: provisioning
+    vars_files:
+      - secret.yml
+
+    tasks:
+      - name: Add EC2 instance to the ELB
+        ec2_elb:
+          state: present
+          ec2_elbs: "{{ elb_name }}"
+          region: "{{ aws_region }}"
+          aws_secret_key: "{{ secret_key }}"
+          aws_access_key: "{{ access_key }}"
+          instance_id: "{{ item.id }}"
+        with_items: "{{ ec2.tagged_instances }}"
+
+      - name: Security group
+        debug: msg="{{ ec2_websecgroup.group_id }}"
+
+      - name: EC2 instances ID
+        debug: msg="{{ item.id }}"
+        with_items: "{{ ec2.tagged_instances }}"
+
+      - name: EC2 instances Public IP
+        debug: msg="{{ item.public_ip }}"
+        with_items: "{{ ec2.tagged_instances }}"
+
+      - name: Load Balancer DNS name
+        debug: msg="{{ ec2_load_balancer.elb.hosted_zone_name }}"
+
+# pause for AWS to run all services
+      - pause:
+          minutes: 1
+
+      - debug: msg="You can check HTTP service now by ELB DNS name"
+      - debug: msg="Your infra will be deleted in {{ lifetime }} minutes"
+
+      - pause:
+          minutes: "{{ lifetime }}"
+          prompt: "Pause for {{ lifetime }} minutes"
+
+      - name: Delete web load balancer
+        local_action:
+          module: ec2_elb_lb
+          name: "{{ ec2_load_balancer.elb.name }}"
+          region: "{{ aws_region }}"
+          aws_secret_key: "{{ secret_key }}"
+          aws_access_key: "{{ access_key }}"
+          state: absent
+
+      - name: Delete Host Key
+        local_action:
+          module: known_hosts
+          key: "{{ item.0.public_ip }} ecdsa-sha2-nistp256 {{ host_key.results[ item.1.msg|int - 1 ].stdout.split(' ')[2] }}"
+          name: "{{ item.0.public_ip }}"
+          state: absent
+        with_together:
+          - "{{ ec2.tagged_instances }}"
+          - "{{ sequence.results }}"
+
+      - name: Terminate EC2 instances
+        ec2:
+          instance_ids: "{{ item.id }}"
+          region: "{{ aws_region }}"
+          aws_secret_key: "{{ secret_key }}"
+          aws_access_key: "{{ access_key }}"
+          state: absent
+        with_items: "{{ ec2.tagged_instances }}"
+
+# pause for AWS terminate EC2 instances
+      - pause:
+          minutes: 1
+
+      - name: Delete WEB security group
+        ec2_group:
+          group_id: "{{ ec2_websecgroup.group_id }}"
+          region: "{{ aws_region }}"
+          aws_secret_key: "{{ secret_key }}"
+          aws_access_key: "{{ access_key }}"
+          state: absent
+
+      - name: Delete ELB security group
+        ec2_group:
+          group_id: "{{ ec2_elbsecgroup.group_id }}"
+          region: "{{ aws_region }}"
+          aws_secret_key: "{{ secret_key }}"
+          aws_access_key: "{{ access_key }}"
+          state: absent

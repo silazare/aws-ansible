@@ -1,0 +1,29 @@
+---
+####################################################
+# AWS EC2 variables
+####################################################
+
+instance_type: t1.micro # Change EC2 instance type
+web_security_group: WEB-SG # Change the security group name here
+elb_security_group: ELB-SG # Change the security group name here
+elb_name: WEB-ELB
+
+ami_id: ami-xxxx # Change the AMI, from which you want to launch the server
+aws_region: us-east-1 # Change the Region
+vpc_id: vpc-xxxx # Change the VPC ID
+
+aws_keypair: XXXX # Name of your public SSH key
+count: 2 # Number of EC2 instances to deploy
+env: test # Name of Environment for EC2 naming/tagging
+ansible_ssh_private_key_file: XXXX.pem # Location of your public SSH key
+lifetime: 1 # How long your infra should be up and running (minutes)
+
+####################################################
+# NGINX variables
+####################################################
+
+site_name: "test" # used for filepaths
+site_title: "test" # used in the website's markup
+site_url: "www.test.com" # used in the web server configuration file
+
+docs_direct_url: "https://docs.google.com/spreadsheets/d/XYZ" # Change direct url for static html
