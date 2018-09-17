@@ -1,0 +1,33 @@
+---
+# ansible-playbook ami_cleanup.yml --vault-password-file vault_pass
+#
+# AWS tasks for delete AMIs and stay latest 5
+# AWS Keys should be provided in vault - secret.yml
+# aws_owner is undefined by defult and should be add into in vault - secret.yml
+- hosts: localhost
+  gather_facts: False
+
+  tasks:
+    - name: Get existing old AMIs for cleanup
+      ec2_ami_find:
+        name: "*"
+        sort: creationDate
+        sort_order: descending
+        sort_end: 100
+        region: "{{ aws_region }}"
+        virtualization_type: hvm
+        owner: "{{ aws_owner }}"
+      register: ami_list
+
+    - debug: msg="AMI list for purge:"
+    - debug: msg="{{ ami_list| json_query('results[5:].[ami_id,creationDate]') }}"
+
+    - name: Remove old AMIs
+      ec2_ami:
+        image_id: "{{ item.ami_id }}"
+        delete_snapshot: yes
+        state: absent
+        region: "{{ aws_region }}"
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+      with_items: '{{ ami_list.results[5:] }}'
