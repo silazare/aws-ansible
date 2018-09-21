@@ -3,7 +3,7 @@
 #
 # AWS tasks for delete AMIs and stay latest 5
 # AWS Keys should be provided in vault - secret.yml
-# aws_owner is undefined by defult and should be add into in vault - secret.yml
+# aws_owner is undefined by defult and should be added into the vault - secret.yml
 - hosts: localhost
   gather_facts: False
 
