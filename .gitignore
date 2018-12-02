@@ -1,0 +1,20 @@
+# Certificate files
+*.pem
+*.pfx
+*.crt
+*.key
+
+#OS X files
+.DS_Store
+
+#Retry files
+*.retry
+
+#Secrets
+secret.yml
+vault_pass
+
+#Variables
+group_vars/all.yml
+roles/nginx/templates/index.html
+
