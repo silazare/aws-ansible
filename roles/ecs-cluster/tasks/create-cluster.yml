@@ -1,0 +1,113 @@
+---
+# Cluster: A logical grouping of container instances that you can place tasks on
+- name: "AWS | ECS | Provision {{ ecs_cluster_name }} cluster"
+  ecs_cluster:
+    name: "{{ ecs_cluster_name }}"
+    state: present
+  register: ecs_cluster
+
+# Permissions: IAM role for permissions on EC2 instances
+- name: "AWS | IAM | Create {{ ecs_instance_iam_role }} IAM role needed for cluster EC2 instances access to AWS EC2 services"
+  iam_role:
+    name: "{{ ecs_instance_iam_role }}"
+    description: "Role for EC2 instances that are part of EC2 clusters (Ansible managed)"
+    assume_role_policy_document: "{{ lookup('file', 'iam_trust_policy.json')  }}"
+    managed_policy:
+      - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role
+    state: present
+  register: iam_machine_role
+
+- name: Wait for {{ ecs_instance_iam_role }} IAM role to become available
+  pause:
+    seconds: 10
+  when: iam_machine_role.changed
+
+# Permissions: Add CloudWatch policy to IAM role, as we create new LogGroups from the instance, see awslog config setup through user_data
+- name: "AWS | IAM | Attach IAM inline policy to IAM role to also create LogGroups on CloudWatch"
+  iam_policy:
+    iam_type: role
+    iam_name: "{{ iam_machine_role.iam_role.role_name }}"
+    policy_name: "cloudwatch_create_log_group"
+    policy_json: '{"Version": "2012-10-17", "Statement": [{"Effect": "Allow", "Action": ["logs:CreateLogGroup"], "Resource": "*"}]}'
+    state: present
+
+# Container Instances: Define a EC2 Launch Configuration to create EC2 instances in an ASG that run the ECS agent
+# Try to find a matching Launch config first for given AMI ID and instance type combo, if not found create a new one
+# to update ASG with it and roll over to new image/instance type.
+
+- name: "AWS | EC2 | Retrieve existing EC2 Launch configurations to see if need to create one"
+  ec2_lc_facts:
+    sort: created_time
+    region: "{{ ecs_ec2_region }}"
+  register: ec2_lc_list
+
+- name: "AWS | EC2 | Extract Launch Configs from List that match given AMI ID, Instance type and Name"
+  set_fact:
+    ec2_lc_existing: "{{ ec2_lc_list.launch_configurations
+      | selectattr('image_id', 'equalto', ecs_ami_id)
+      | selectattr('instance_type', 'equalto', ecs_instance_type)
+      | selectattr('launch_configuration_name', 'match', '^'+ecs_cluster_name+'-ecs*')
+      | list }}"
+  when: (ec2_lc_list.launch_configurations | length) > 0
+
+- name: "AWS | EC2 | Extract Launch Config from filtered list items"
+  set_fact:
+    ec2_lc_usable: "{{ ec2_lc_existing | last }}"
+  when:
+    - ec2_lc_existing is defined 
+    - (ec2_lc_existing | length) > 0
+
+- name: "AWS | EC2 | Print existing Launch Config which will be used"
+  debug:
+    msg: "{{ ec2_lc_usable.launch_configuration_name }}"
+  when: ec2_lc_usable is defined
+
+- name: "AWS | EC2 | Create a new EC2 Launch Configuration for ECS use (if none was found)"
+  ec2_lc:
+    name: "{{ ecs_cluster_name }}-ecs-lc-{{ lookup('pipe', 'date +%Y%m%d-%H%M') }}"
+    image_id: "{{ ecs_ami_id }}"
+    key_name: "{{ ecs_ssh_key_name }}"
+    security_groups: "{{ ecs_security_groups }}"
+    instance_type: "{{ ecs_instance_type }}"
+    instance_monitoring: "{{ ecs_instance_monitoring }}"
+    instance_profile_name: "{{ ecs_instance_iam_role }}"
+    assign_public_ip: "{{ ecs_assign_public_ip }}"
+    user_data: "{{ ecs_userdata }}"
+    region: "{{ ecs_ec2_region }}"
+    state: present
+  register: ec2_new_lc
+  when: ec2_lc_usable is undefined
+
+- name: "AWS | EC2 | Set launch config name to existing one"
+  set_fact:
+    ec2_ecs_lc_name: "{{ ec2_lc_usable.launch_configuration_name }}"
+  when:
+    - ec2_lc_usable is defined
+    - ec2_lc_usable.launch_configuration_name is defined
+
+- name: "AWS | EC2 | Set launch config name to new created one"
+  set_fact:
+    ec2_ecs_lc_name: "{{ ec2_new_lc.name }}"
+  when:
+    - ec2_new_lc is defined
+    - ec2_new_lc.name is defined
+
+# Container Instances: Define an Auto Scaling Group to manage creating/terminating EC2 instances
+# This step is always return "changed" - https://github.com/ansible/ansible/issues/25182
+- name: "AWS | EC2 | Create EC2 Auto Scaling Group for ECS use"
+  ec2_asg:
+    name: "{{ ecs_asg_name }}"
+    health_check_period: "{{ ecs_asg_health_check_period }}"
+    health_check_type: "{{ ecs_asg_health_type }}"
+    default_cooldown: "{{ ecs_asg_default_cooldown }}"
+    replace_all_instances: "{{ ecs_asg_replace_all_instances }}"
+    launch_config_name: "{{ ec2_ecs_lc_name }}"
+    min_size: "{{ ecs_asg_min_size }}"
+    max_size: "{{ ecs_asg_max_size }}"
+    desired_capacity: "{{ ecs_asg_desired_capacity }}"
+    vpc_zone_identifier: "{{ ecs_vpc_subnets }}"
+    tags: "{{ ecs_ec2_tags }}"
+    wait_for_instances: true
+    region: "{{ ecs_ec2_region }}"
+    state: present
+  register: ec2_asg

@@ -1,0 +1,4 @@
+# ALB usage for ECS services
+ecs_alb: false
+# Empty command
+command: []

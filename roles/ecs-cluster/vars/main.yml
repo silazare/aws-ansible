@@ -1,0 +1,5 @@
+---
+vpc_region: us-east-1
+vpc_name: "None"
+subnet_name: "None"
+sg_name: "None"

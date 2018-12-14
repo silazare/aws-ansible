@@ -1,0 +1,93 @@
+---
+# Tasks to delete active services before ECS cluster delete.
+- name: "AWS | ECS | Query cluster for service details"
+  ecs_service_facts:
+    cluster: "{{ ecs_cluster_name }}"
+    details: "true"
+  register: service_facts
+  when: ecs_state == "absent"
+
+- name: "AWS | ECS | Scale services running on the ECS cluster to 0 for delete"
+  ecs_service:
+    name: "{{ item.serviceName }}"
+    cluster: "{{ ecs_cluster_name }}"
+    task_definition: "{{ item.taskDefinition }}"
+    desired_count: 0
+    load_balancers: "{{ item.loadBalancers }}"
+    region: "{{ ecs_ec2_region }}"
+    state: present
+  when:
+    - item.serviceName is defined
+    - item.status == 'ACTIVE'
+  loop: "{{ service_facts.ansible_facts.services }}"
+
+- name: "AWS | ECS | Delete services running on the ECS cluster"
+  ecs_service:
+    name: "{{ item.serviceName }}"
+    cluster: "{{ ecs_cluster_name }}"
+    region: "{{ ecs_ec2_region }}"
+    state: absent
+  when:
+    - item.serviceName is defined
+    - item.status == 'ACTIVE'
+  loop: "{{ service_facts.ansible_facts.services }}"
+
+- name: "AWS | EC2 | Get Auto Scaling Group infos, to know which LC to delete later"
+  ec2_asg_facts:
+    name: "{{ ecs_asg_name }}"
+    region: "{{ ecs_ec2_region }}"
+  register: ec2_asg
+
+- name: "AWS | EC2 | Remove the EC2 Auto Scaling Group - {{ ecs_asg_name }}"
+  ec2_asg:
+    name: "{{ ecs_asg_name }}"
+    state: absent
+
+- name: "AWS | EC2 | Remove the EC2 Launch Configuration"
+  ec2_lc:
+    name: "{{ ec2_asg.results.0.launch_configuration_name }}"
+    state: absent
+  when: ec2_asg.results.0 is defined
+
+- name: "AWS | IAM | Remove CloudWatch policy from IAM role"
+  iam_policy:
+    iam_type: role
+    iam_name: "{{ ecs_instance_iam_role }}"
+    policy_name: "cloudwatch_create_log_group"
+    state: absent
+
+- name: "AWS | IAM | Remove {{ ecs_instance_iam_role }} IAM role"
+  iam_role:
+    name: "{{ ecs_instance_iam_role }}"
+    state: absent
+
+- name: "AWS | ECS | Delete {{ ecs_cluster_name }} ECS cluster"
+  ecs_cluster:
+    name: "{{ ecs_cluster_name }}"
+    state: absent
+
+- name: "AWS | EC2 | Gather ALB facts"
+  elb_application_lb_facts:
+    names:
+      - "{{ ecs_cluster_name }}-alb"
+  register: ecs_alb_facts
+
+- name: "AWS | EC2 | Gather TG facts"
+  elb_target_group_facts:
+    load_balancer_arn: "{{ ecs_alb_facts.load_balancers.0.load_balancer_arn }}"
+  register: ecs_tg_facts
+
+- name: "AWS | EC2 | Delete ALB for service"
+  elb_application_lb:
+    name: "{{ ecs_cluster_name }}-alb"
+    state: absent
+
+- name: "AWS | EC2 | Wait 1 minute to make sure ALB is removed"
+  pause:
+    minutes: 1
+
+- name: "AWS | EC2 | Delete Target groups"
+  elb_target_group:
+    name: "{{ item.target_group_name }}"
+    state: absent
+  loop: "{{ ecs_tg_facts.target_groups }}"

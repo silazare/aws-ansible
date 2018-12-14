@@ -1,0 +1,61 @@
+---
+# Gather Task Definition facts
+- name: Gather Task Definition facts for {{ container_name }}
+  ecs_taskdefinition_facts:
+    task_definition: "{{ ecs_cluster_name }}-{{ container_name }}-task"
+  register: ecs_task
+  when:
+    - ecs_state == "present"
+
+- name: Print Task Definition ARN
+  debug:
+    msg: "{{ ecs_task.task_definition_arn }}"
+  when:
+    - ecs_state == "present"
+
+# Create Service
+- name: Create {{ container_name }} service running on the ECS cluster without ALB
+  ecs_service:
+    name: "{{ ecs_cluster_name }}-{{ container_name }}-service"
+    cluster: "{{ ecs_cluster_name }}"
+    task_definition: "{{ ecs_task.task_definition_arn }}"
+    desired_count: "{{ desired_service_count }}"
+    deployment_configuration:
+      minimum_healthy_percent: 100
+      maximum_percent: 200
+    region: "{{ ecs_ec2_region }}"
+    state: present
+  when:
+    - ecs_state == "present"
+    - ecs_task is defined
+    - ecs_alb == false
+
+- name: Gather Target group facts
+  elb_target_group_facts:
+    names:
+      - "{{ ecs_cluster_name }}-{{ container_name }}-target-group"
+  register: ecs_tg
+  when:
+    - ecs_state == "present"
+    - ecs_task is defined
+    - ecs_alb == true
+
+- name: Create {{ container_name }} service running on the ECS cluster with ALB
+  ecs_service:
+    name: "{{ ecs_cluster_name }}-{{ container_name }}-service"
+    cluster: "{{ ecs_cluster_name }}"
+    task_definition: "{{ ecs_task.task_definition_arn }}"
+    desired_count: "{{ desired_service_count }}"
+    deployment_configuration:
+      minimum_healthy_percent: 100
+      maximum_percent: 200
+    load_balancers:
+      - targetGroupArn: "{{ ecs_tg.target_groups[0].target_group_arn }}"
+        containerName: "{{ container_name }}"
+        containerPort: "{{ container_port }}"
+    region: "{{ ecs_ec2_region }}"
+    state: present
+  when:
+    - ecs_state == "present"
+    - ecs_task is defined
+    - ecs_alb == true

@@ -1,0 +1,40 @@
+# ECS provisioning playbook
+# ansible-playbook ecs_cluster.yml --extra-vars="ecs_state=present" --vault-password-file vault_pass << create cluster
+# ansible-playbook ecs_cluster.yml --extra-vars="ecs_state=absent" --vault-password-file vault_pass << destroy cluster
+# vpc_facts for AWS VPC dynamic facts, if enabled need to set patterns in vars, if disabled playbook just use default VPC
+
+---
+- name: Setup ECS cluster inside the VPC
+  hosts: localhost
+  vars:
+    vpc_facts: false
+    ecs_cluster_name: "test"
+    ecs_env: "{{ env }}"
+    ecs_ssh_key_name: "{{ aws_keypair }}"
+    ecs_ami_id: "ami-045f1b3f87ed83659"
+    ecs_security_groups: "{{ ecs_sg.security_groups[0].group_id }}"
+    ecs_vpc_subnets: "{{ ecs_subnet_ids | join(',') }}"
+    ecs_instance_type: t2.medium
+    ecs_asg_min_size: 0
+    ecs_asg_max_size: 2
+    ecs_asg_desired_capacity: 2
+    ecs_ec2_tags:
+      - Name: "{{ ecs_cluster_name }}-ecs-instance"
+      - role: "container-ecs-instance"
+      - environment: "{{ ecs_env }}"
+  vars_files:
+    - secret.yml
+  roles:
+    - ecs-cluster
+    - role: ecs-task-definition
+      container_name: "reddit-ui"
+      image: "exciter86/ui:latest"
+      container_memory: 1GB
+      container_port: 9292
+      host_port: 0
+      ecs_alb: true
+    - role: ecs-service
+      container_name: "reddit-ui"
+      container_port: 9292
+      desired_service_count: 2
+      ecs_alb: true

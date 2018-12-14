@@ -1,0 +1,51 @@
+---
+# Bug with module idempotency - https://github.com/ansible/ansible/pull/26752
+# Need to define protocol and essential in order not to create new revision every time
+- name: Create a Task definition for {{ container_name }} service (with Volume)
+  ecs_taskdefinition:
+    family: "{{ ecs_cluster_name }}-{{ container_name }}-task"
+    containers:
+    - name: "{{ container_name }}"
+      command: "{{ command }}"
+      essential: true
+      image: "{{ image }}"
+      portMappings:
+      - containerPort: "{{ container_port }}"
+        hostPort: "{{ host_port }}"
+        protocol: tcp
+      mountPoints:
+      - containerPath: "{{ container_path }}"
+        sourceVolume: "{{ source_path }}"
+    launch_type: EC2
+    memory: "{{ container_memory }}"
+    volumes:
+    - name: "{{ source_path }}"
+    region: "{{ ecs_ec2_region }}"
+    state: present
+  register: ecs_task
+  when:
+    - ecs_state == "present"
+    - container_path is defined
+    - source_path is defined
+
+- name: "Create a Task definition for {{ container_name }} service (without Volume)"
+  ecs_taskdefinition:
+    family: "{{ ecs_cluster_name }}-{{ container_name }}-task"
+    containers:
+    - name: "{{ container_name }}"
+      command: "{{ command }}"
+      essential: true
+      image: "{{ image }}"
+      portMappings:
+      - containerPort: "{{ container_port }}"
+        hostPort: "{{ host_port }}"
+        protocol: tcp
+    launch_type: EC2
+    memory: "{{ container_memory }}"
+    region: "{{ ecs_ec2_region }}"
+    state: present
+  register: ecs_task
+  when:
+    - ecs_state == "present"
+    - container_path is undefined
+    - source_path is undefined

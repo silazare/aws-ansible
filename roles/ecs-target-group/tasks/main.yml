@@ -1,0 +1,43 @@
+---
+# Ansible issue with draining healthy targets - https://github.com/ansible/ansible/pull/39715
+- name: Create a Target group for {{ container_name }} service
+  elb_target_group:
+    name: "{{ ecs_cluster_name }}-{{ container_name }}-target-group"
+    protocol: http
+    port: "{{ container_port }}"
+    vpc_id: "{{ ecs_vpc.vpcs[0].vpc_id }}"
+    health_check_path: /
+    successful_response_codes: "200,250-260"
+    target_type: instance
+    state: present
+    wait_timeout: 600
+    wait: True
+  register: ecs_tg
+  when:
+    - ecs_state == "present"
+    - ecs_alb == true
+
+- name: Create ALB for {{ container_name }} service
+  elb_application_lb:
+    name: "{{ ecs_cluster_name }}-alb"
+    security_groups: "{{ ecs_sg.security_groups[0].group_id }}"
+    subnets: "{{ ecs_subnet_ids | join(',') }}"
+    state: present
+    listeners:
+      - Protocol: HTTP
+        Port: 80
+        DefaultActions:
+          - Type: forward
+            TargetGroupName: "{{ ecs_cluster_name }}-{{ container_name }}-target-group"
+        Rules:
+          - Conditions:
+              - Field: path-pattern
+                Values:
+                  - '/test'
+            Priority: '1'
+            Actions:
+              - TargetGroupName: "{{ ecs_cluster_name }}-{{ container_name }}-target-group"
+                Type: forward
+  when:
+    - ecs_state == "present"
+    - ecs_alb == true

@@ -1,0 +1,4 @@
+# ALB usage for ECS services
+ecs_alb: false
+# Default desired count of services is always 1
+desired_service_count: 1

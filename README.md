@@ -4,6 +4,7 @@
   - [EC2 launch example](./ec2_launch.yml)
   - [EC2 facts collection example](./ec2_facts.yml)
   - [EC2 custom AMI cleanup example](./ami_cleanup.yml)
+  - [ECS cluster playbook example](./ecs_cluster.yml)
 
 ### AWS deployment for Ubuntu 16.04+Nginx+Ansible.
 

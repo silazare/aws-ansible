@@ -1,0 +1,19 @@
+---
+galaxy_info:
+  author: Svyatoslav Lazarev
+  description: Ansible role for the provisioning of ECS services within an AWS account
+  license: MIT
+  min_ansible_version: 2.7
+
+  platforms:
+    - name: Amazon
+      versions:
+        - 2013.09
+
+  galaxy_tags:
+    - AWS
+    - EC2
+    - ECS
+
+dependencies:
+  - { role: ecs-target-group }

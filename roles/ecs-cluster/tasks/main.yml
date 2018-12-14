@@ -1,0 +1,19 @@
+---
+# Gather VPC facts if needed
+- import_tasks: vpc-facts.yml
+  when: vpc_facts == true
+
+# Run on default VPC stack
+- import_tasks: vpc-default.yml
+  when: vpc_facts == false
+
+# Check pre-requisites
+- import_tasks: pre-requisites.yml
+
+# Create ECS cluster
+- import_tasks: create-cluster.yml
+  when: ecs_state == "present"
+
+# Destroy ECS cluster
+- import_tasks: destroy-cluster.yml
+  when: ecs_state == "absent"

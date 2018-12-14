@@ -1,0 +1,17 @@
+galaxy_info:
+  author: Svyatoslav Lazarev
+  description: Ansible role for simplifying the provisioning of Task Definitions for ECS clusters within an AWS account
+  license: MIT
+  min_ansible_version: 2.7
+
+  platforms:
+    - name: Amazon
+      versions:
+        - 2013.09
+
+  galaxy_tags:
+    - AWS
+    - EC2
+    - ECS
+
+dependencies: []
