@@ -1,9 +1,9 @@
 ## AWS Infra deployment example playbooks
 
 - Playbooks available:
-  - EC2+ELB+2SG+NGINX+Simple HTML page auto creation and destroy after defined lifetime expired.
-  - EC2 facts collection example which could be used for playing different tasks on it.
-  - EC2 custom AMI cleanup example.
+  - [EC2 launch example](./ec2_launch.yml)
+  - [EC2 facts collection example](./ec2_facts.yml)
+  - [EC2 custom AMI cleanup example](./ami_cleanup.yml)
 
 ### AWS deployment for Ubuntu 16.04+Nginx+Ansible.
 

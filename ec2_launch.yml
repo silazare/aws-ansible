@@ -1,4 +1,5 @@
 ---
+# EC2+ELB+SG+NGINX+Simple HTML page auto creation and destroy after defined lifetime expired.
 # ansible-playbook ec2_launch.yml --vault-password-file vault_pass
 #
 # AWS tasks for infra deploy which are run 'locally'
@@ -149,13 +150,17 @@
           state: started
         with_items: "{{ ec2.tagged_instances }}"
 
-      - name: Download static site html
-        local_action: shell curl {{ docs_direct_url }}/export?format=tsv -o {{ playbook_dir }}/roles/nginx/templates/index.html
+      - name: Download static site html at Nginx local templates
+        local_action:
+          module: get_url
+          url: "{{ docs_direct_url }}/export?format=tsv"
+          dest: "{{ playbook_dir }}/roles/nginx/templates/index.html"
 
       - name: Touch host ssh fingerprints
         shell: ssh-keyscan -t ecdsa {{ item.public_ip }}
         with_items: "{{ ec2.tagged_instances }}"
         register: host_key
+        changed_when: "'changed' in host_key.stdout"
 
       - name: Add Host Key
         local_action:
@@ -175,8 +180,14 @@
     become_method: sudo
     become_user: root
     gather_facts: false
+
+    pre_tasks:
+      - name: Install Python 2.7
+        raw: test -e /usr/bin/python || echo "CHANGED!!!" && (apt-get update && apt-get install -y python)
+        register: install_python
+        changed_when: '"CHANGED!!!" in install_python.stdout'
+
     roles:
-      - bootstrap
       - common
       - nginx
 
@@ -214,14 +225,15 @@
       - name: Load Balancer DNS name
         debug: msg="{{ ec2_load_balancer.elb.hosted_zone_name }}"
 
-# pause for AWS to run all services
-      - pause:
+      - name: Pause to allow AWS run all the services
+        pause:
           minutes: 1
 
       - debug: msg="You can check HTTP service now by ELB DNS name"
       - debug: msg="Your infra will be deleted in {{ lifetime }} minutes"
 
-      - pause:
+      - name: Lifetime pause - how long services should be active
+        pause:
           minutes: "{{ lifetime }}"
           prompt: "Pause for {{ lifetime }} minutes"
 
@@ -253,8 +265,8 @@
           state: absent
         with_items: "{{ ec2.tagged_instances }}"
 
-# pause for AWS terminate EC2 instances
-      - pause:
+      - name: Pause to allow AWS terminate EC2 instances
+        pause:
           minutes: 1
 
       - name: Delete WEB security group

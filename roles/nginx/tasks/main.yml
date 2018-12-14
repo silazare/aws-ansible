@@ -2,7 +2,7 @@
 - name: Install nginx.
   package:
     name: nginx
-    state: latest
+    state: present
 
 - name: Create website directory
   file:
