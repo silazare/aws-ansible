@@ -76,6 +76,7 @@
   elb_target_group_facts:
     load_balancer_arn: "{{ ecs_alb_facts.load_balancers.0.load_balancer_arn }}"
   register: ecs_tg_facts
+  when: ecs_alb_facts.load_balancers.0 is defined
 
 - name: "AWS | EC2 | Delete ALB for service"
   elb_application_lb:
@@ -91,3 +92,4 @@
     name: "{{ item.target_group_name }}"
     state: absent
   loop: "{{ ecs_tg_facts.target_groups }}"
+  when: ecs_tg_facts.target_groups is defined

@@ -1,7 +1,7 @@
 ## AWS Infra deployment example playbooks
 
 - Playbooks available:
-  - [EC2 launch example](./ec2_launch.yml)
+  - [EC2 launch example](./ec2_launch.yml) - [guide](https://github.com/silazare/aws-ansible#aws-deployment-for-ubuntu-1604nginxansible)
   - [EC2 facts collection example](./ec2_facts.yml)
   - [EC2 custom AMI cleanup example](./ami_cleanup.yml)
   - [ECS cluster playbook example](./ecs_cluster.yml)
@@ -36,3 +36,21 @@ ansible-playbook ec2_launch.yml --vault-password-file vault_pass
 ```
 
 - Check instances in AWS console after creation/destroy.
+
+### AWS deployment for ECS cluster.
+
+#### TBD
+- No idempotency for target groups creation several times.
+- Link all services with ALB target groups.
+
+- Clone this repository to your folder and repeat the same configuration steps as described [here](https://github.com/silazare/aws-ansible#aws-deployment-for-ubuntu-1604nginxansible)
+
+- Playbook execution to create ECS cluster with example of services:
+```sh
+ansible-playbook ecs_cluster.yml --extra-vars="ecs_state=present" --vault-password-file vault_pass
+```
+
+- Playbook execution to destroy ECS cluster with all related services:
+```sh
+ansible-playbook ecs_cluster.yml --extra-vars="ecs_state=absent" --vault-password-file vault_pass
+```

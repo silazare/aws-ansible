@@ -33,11 +33,13 @@
           - Conditions:
               - Field: path-pattern
                 Values:
-                  - '/test'
-            Priority: '1'
+                  - "/{{ container_name }}"
+            Priority: "1"
             Actions:
               - TargetGroupName: "{{ ecs_cluster_name }}-{{ container_name }}-target-group"
                 Type: forward
+    purge_listeners: no
+    purge_rules: no
   when:
     - ecs_state == "present"
     - ecs_alb == true

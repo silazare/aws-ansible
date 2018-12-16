@@ -16,8 +16,8 @@
     ecs_vpc_subnets: "{{ ecs_subnet_ids | join(',') }}"
     ecs_instance_type: t2.medium
     ecs_asg_min_size: 0
-    ecs_asg_max_size: 2
-    ecs_asg_desired_capacity: 2
+    ecs_asg_max_size: 1
+    ecs_asg_desired_capacity: 1
     ecs_ec2_tags:
       - Name: "{{ ecs_cluster_name }}-ecs-instance"
       - role: "container-ecs-instance"
@@ -36,5 +36,5 @@
     - role: ecs-service
       container_name: "reddit-ui"
       container_port: 9292
-      desired_service_count: 2
+      desired_service_count: 1
       ecs_alb: true
