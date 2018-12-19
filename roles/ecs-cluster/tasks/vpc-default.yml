@@ -1,38 +1,38 @@
 ---
-- name: Gather facts for VPC {{ vpc_name }}
+- name: Gather facts for Default VPC {{ vpc_name }}
   ec2_vpc_net_facts:
     region: "{{ vpc_region }}"
   register: ecs_vpc
 
-- name: Print VPC {{ vpc_name }} ID
+- name: Print Default VPC {{ vpc_name }} ID
   debug:
     msg: "{{ ecs_vpc.vpcs[0].vpc_id }}"
     verbosity: 1
 
-- name: Gather facts for {{ subnet_name[:-1] }} subnets
+- name: Gather facts for Default {{ subnet_name[:-1] }} subnets
   ec2_vpc_subnet_facts:
     region: "{{ vpc_region }}"
     filters:
       vpc-id: "{{ ecs_vpc.vpcs[0].vpc_id }}"
   register: ecs_subnet
 
-- name: Create {{ subnet_name[:-1] }} subnets list
+- name: Create Default {{ subnet_name[:-1] }} subnets list
   set_fact:
     ecs_subnet_ids: "{{ ecs_subnet.subnets|map(attribute='id')|list }}"
 
-- name: Print {{ subnet_name[:-1] }} subnets list
+- name: Print Default {{ subnet_name[:-1] }} subnets list
   debug:
     msg: "{{ ecs_subnet_ids }}"
     verbosity: 1
 
-- name: Gather facts for {{ sg_name }} Security Group
+- name: Gather facts for Default {{ sg_name }} Security Group
   ec2_group_facts:
     region: "{{ vpc_region }}"
     filters:
       vpc-id: "{{ ecs_vpc.vpcs[0].id }}"
   register: ecs_sg
 
-- name: Print {{ sg_name }} Security Group
+- name: Print Default {{ sg_name }} Security Group
   debug:
     msg: "{{ ecs_sg.security_groups[0].group_id }}"
     verbosity: 1

@@ -15,5 +15,4 @@ galaxy_info:
     - EC2
     - ECS
 
-dependencies:
-  - { role: ecs-target-group }
+dependencies: []

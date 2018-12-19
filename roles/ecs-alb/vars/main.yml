@@ -1,0 +1,28 @@
+---
+alb_rules:
+  - Conditions:
+      - Field: path-pattern
+        Values:
+          - "/ui"
+    Priority: 1
+    Actions:
+      - TargetGroupName: "{{ ecs_cluster_name }}-reddit-ui-target-group"
+        Type: forward
+
+  - Conditions:
+      - Field: path-pattern
+        Values:
+          - "/post_db"
+    Priority: 2
+    Actions:
+    - TargetGroupName: "{{ ecs_cluster_name }}-reddit-mongo-target-group"
+      Type: forward
+
+  - Conditions:
+      - Field: path-pattern
+        Values:
+          - "/post"
+    Priority: 3
+    Actions:
+    - TargetGroupName: "{{ ecs_cluster_name }}-reddit-post-target-group"
+      Type: forward

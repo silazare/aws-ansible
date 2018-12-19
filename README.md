@@ -39,10 +39,6 @@ ansible-playbook ec2_launch.yml --vault-password-file vault_pass
 
 ### AWS deployment for ECS cluster.
 
-#### TBD
-- No idempotency for target groups creation several times.
-- Link all services with ALB target groups.
-
 - Clone this repository to your folder and repeat the same configuration steps as described [here](https://github.com/silazare/aws-ansible#aws-deployment-for-ubuntu-1604nginxansible)
 
 - Playbook execution to create ECS cluster with example of services:
@@ -54,3 +50,9 @@ ansible-playbook ecs_cluster.yml --extra-vars="ecs_state=present" --vault-passwo
 ```sh
 ansible-playbook ecs_cluster.yml --extra-vars="ecs_state=absent" --vault-password-file vault_pass
 ```
+
+TBD:
+1) Custom healthcheck for post service - https://github.com/ansible/ansible/issues/50024
+2) Link all microservices within ALB target groups
+3) More parametrize for ALB rules
+4) No idempotency for target groups creation several times  - https://github.com/ansible/ansible/pull/39715

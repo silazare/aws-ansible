@@ -1,4 +1,4 @@
-# ECS provisioning playbook
+# ECS provisioning example playbook
 # ansible-playbook ecs_cluster.yml --extra-vars="ecs_state=present" --vault-password-file vault_pass << create cluster
 # ansible-playbook ecs_cluster.yml --extra-vars="ecs_state=absent" --vault-password-file vault_pass << destroy cluster
 # vpc_facts for AWS VPC dynamic facts, if enabled need to set patterns in vars, if disabled playbook just use default VPC
@@ -33,8 +33,52 @@
       container_port: 9292
       host_port: 0
       ecs_alb: true
+    - role: ecs-target-group
+      container_name: "reddit-ui"
+      container_port: 9292
+      ecs_alb: true
+    - role: ecs-task-definition
+      container_name: "reddit-mongo"
+      image: "mongo:3.2"
+      container_memory: 1GB
+      container_port: 27017
+      host_port: 0
+      source_path: "post_db"
+      container_path: "/data/db"
+      ecs_alb: true
+      # Test MongoDB with docker volume
+    - role: ecs-target-group
+      container_name: "reddit-mongo"
+      container_port: 27017
+      ecs_alb: true
+    - role: ecs-task-definition
+      container_name: "reddit-post"
+      image: "exciter86/post:latest"
+      container_memory: 1GB
+      container_port: 5000
+      host_port: 0
+      ecs_alb: true
+    - role: ecs-target-group
+      container_name: "reddit-post"
+      container_port: 5000
+      healthcheck: /healthcheck
+      ecs_alb: true
+      # ALB role should be executed in before Services creation
+    - role: ecs-alb
+      default_tg: "{{ ecs_cluster_name }}-reddit-ui-target-group"
+      #
     - role: ecs-service
       container_name: "reddit-ui"
       container_port: 9292
+      desired_service_count: 1
+      ecs_alb: true
+    - role: ecs-service
+      container_name: "reddit-mongo"
+      container_port: 27017
+      desired_service_count: 1
+      ecs_alb: true
+    - role: ecs-service
+      container_name: "reddit-post"
+      container_port: 5000
       desired_service_count: 1
       ecs_alb: true

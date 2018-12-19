@@ -1,0 +1,21 @@
+---
+- name: Create ALB for container services
+  elb_application_lb:
+    name: "{{ ecs_cluster_name }}-alb"
+    security_groups: "{{ ecs_sg.security_groups[0].group_id }}"
+    subnets: "{{ ecs_subnet_ids | join(',') }}"
+    state: present
+    listeners:
+      - Protocol: HTTP
+        Port: 80
+        DefaultActions:
+          - Type: forward
+            TargetGroupName: "{{ default_tg }}"
+        Rules: "{{ alb_rules }}"
+    purge_listeners: no
+    purge_rules: no
+  loop:
+    - "{{ alb_rules }}"
+  when:
+    - ecs_state == "present"
+    - default_tg is defined
