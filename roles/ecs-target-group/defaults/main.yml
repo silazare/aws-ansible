@@ -1,2 +1,3 @@
 ---
 healthcheck: /
+target_group_protocol: http

@@ -52,7 +52,6 @@ ansible-playbook ecs_cluster.yml --extra-vars="ecs_state=absent" --vault-passwor
 ```
 
 TBD:
-1) Custom healthcheck for post service - https://github.com/ansible/ansible/issues/50024
-2) Link all microservices within ALB target groups
-3) More parametrize for ALB rules
-4) No idempotency for target groups creation several times  - https://github.com/ansible/ansible/pull/39715
+1) Link all microservices within ALB target groups
+2) More parametrize for ALB rules
+3) No idempotency for target groups creation several times  - https://github.com/ansible/ansible/pull/39715

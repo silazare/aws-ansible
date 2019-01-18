@@ -1,12 +1,12 @@
 ---
 # Ansible issue with draining healthy targets - https://github.com/ansible/ansible/pull/39715
-# Ansible issue with custom health_check_path - https://github.com/ansible/ansible/issues/50024
 - name: Create a Target group for {{ container_name }} service
   elb_target_group:
     name: "{{ ecs_cluster_name }}-{{ container_name }}-target-group"
-    protocol: http
+    protocol: "{{ target_group_protocol }}"
     port: "{{ container_port }}"
     vpc_id: "{{ ecs_vpc.vpcs[0].vpc_id }}"
+    health_check_protocol: "{{ target_group_protocol }}"
     health_check_path: "{{ healthcheck }}"
     successful_response_codes: "200,250-260"
     target_type: instance
